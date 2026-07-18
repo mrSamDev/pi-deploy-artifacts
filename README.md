@@ -7,7 +7,7 @@ Ask pi to build a dashboard, annotated diff, comparison layout, or interactive p
 ## Install
 
 ```bash
-pi install git:github.com/<your-org>/pi-artifacts
+pi install git:github.com/mrSamDev/pi-artifacts
 ```
 
 Or test without installing:
@@ -15,6 +15,10 @@ Or test without installing:
 ```bash
 pi -e ./path/to/pi-artifacts/extensions/index.ts
 ```
+
+## Links
+
+- GitHub: https://github.com/mrSamDev/pi-artifacts
 
 ## Prerequisites
 

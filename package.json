@@ -1,5 +1,5 @@
 {
-  "name": "pi-artifacts",
+  "name": "@mrSamDev/pi-artifacts",
   "version": "0.1.0",
   "description": "Deploy HTML artifacts to Vercel, Cloudflare Pages, Netlify, or GitHub Pages — like Claude Code artifacts for pi",
   "keywords": [
@@ -13,6 +13,18 @@
   ],
   "license": "MIT",
   "type": "module",
+  "files": [
+    "extensions/",
+    "skills/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mrSamDev/pi-artifacts.git"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest"
