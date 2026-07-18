@@ -1,0 +1,31 @@
+{
+  "name": "pi-artifacts",
+  "version": "0.1.0",
+  "description": "Deploy HTML artifacts to Vercel, Cloudflare Pages, Netlify, or GitHub Pages — like Claude Code artifacts for pi",
+  "keywords": [
+    "pi-package",
+    "artifacts",
+    "deploy",
+    "vercel",
+    "cloudflare",
+    "netlify",
+    "github-pages"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  }
+}
