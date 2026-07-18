@@ -1,5 +1,5 @@
 {
-  "name": "@mrSamDev/pi-artifacts",
+  "name": "@mrsamdev/pi-artifacts",
   "version": "0.1.0",
   "description": "Deploy HTML artifacts to Vercel, Cloudflare Pages, Netlify, or GitHub Pages — like Claude Code artifacts for pi",
   "keywords": [
