@@ -1,3 +1,8 @@
+---
+name: artifacts
+description: Deploy HTML pages to live URLs on Vercel, Cloudflare Pages, Netlify, or GitHub Pages. Use when the user asks for a visual, interactive, or shareable page — anything easier to look at in a browser than to read as terminal text.
+---
+
 # Artifacts
 
 Use this skill when the user asks for a visual, interactive, or shareable page — anything that is easier to look at in a browser than to read as terminal text.
