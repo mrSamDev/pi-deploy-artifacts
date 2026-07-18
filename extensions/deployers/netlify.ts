@@ -5,16 +5,17 @@ export const netlifyDeployer: Deployer = {
   name: "netlify",
   label: "Netlify",
   check: () => which("netlify"),
-  deployHub(hubDir, cwd, state, execFn) {
+  async deployHub(hubDir, cwd, state, execFn) {
     const info = state.platforms.netlify;
 
     const siteNameFlag = info?.projectName
       ? `--site "${info.projectName}"`
       : `--site-name "${projectNameFromCwd(cwd)}"`;
 
-    const out = execFn(
-      `netlify deploy --prod --dir "${hubDir}" ${siteNameFlag} --json`,
-      cwd
+    // Run from hubDir so Netlify finds .netlify config in cwd
+    const out = await execFn(
+      `netlify deploy --prod --dir . ${siteNameFlag} --json`,
+      hubDir
     );
 
     let baseUrl: string;

@@ -5,10 +5,11 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { slugify, exec } from "./helpers.js";
+import { slugify, execAsync } from "./helpers.js";
 import { hubDir, loadState, saveState } from "./state.js";
 import { deployers } from "./deployers/index.js";
 import type { Deployer } from "./deployers/types.js";
+import { resolvePlatformChoice } from "./resolvePlatform.js";
 
 const SETTINGS_FILE = join(homedir(), ".pi", "agent", "settings.json");
 
@@ -19,21 +20,6 @@ function isAutoConfirm(): boolean {
   } catch {
     return false;
   }
-}
-
-function pickDeployer(
-  preferredPlatform: string | undefined,
-  existing: { platform: string } | undefined,
-  available: Deployer[]
-): Deployer | null {
-  if (preferredPlatform) {
-    const d = available.find((d) => d.name === preferredPlatform);
-    return d ?? null;
-  }
-  if (existing) {
-    return available.find((d) => d.name === existing.platform) ?? available[0];
-  }
-  return available[0];
 }
 
 function noCliMessage(): string {
@@ -69,6 +55,7 @@ function updatePlatformState(
 
 export default function (pi: ExtensionAPI) {
   let sessionConfirmed = false;
+  let sessionPreferredPlatform: string | undefined;
 
   pi.registerTool({
     name: "publish_artifact",
@@ -82,13 +69,14 @@ export default function (pi: ExtensionAPI) {
       "Use publish_artifact when the user asks for a visual, interactive, or shareable page \u2014 anything easier to look at in a browser than to read as terminal text.",
       "Build self-contained HTML with inline CSS and JS, embed images as data URIs.",
       "Call publish_artifact with the same title to update an existing artifact in place.",
+      "If the user has a preferred hosting platform, pass it via `platform`; otherwise the user picks interactively when several CLIs are installed.",
     ],
     parameters: Type.Object({
       html: Type.String({ description: "Full self-contained HTML content to deploy" }),
       title: Type.String({ description: "Artifact title. Use the same title to update an existing artifact." }),
       platform: Type.Optional(
         StringEnum(["vercel", "cloudflare", "netlify", "github"] as const, {
-          description: "Deployment platform. Auto-detected from installed CLIs if omitted.",
+          description: "Deployment platform. Auto-detected from installed CLIs if omitted. When multiple are installed, the user is prompted to choose.",
         })
       ),
     }),
@@ -103,12 +91,40 @@ export default function (pi: ExtensionAPI) {
         return { content: [{ type: "text", text: noCliMessage() }], isError: true };
       }
 
-      const deployer = pickDeployer(preferredPlatform, existing, available);
-      if (!deployer) {
+      const choice = resolvePlatformChoice({
+        preferred: preferredPlatform,
+        existing: existing?.platform,
+        sessionChoice: sessionPreferredPlatform,
+        available,
+      });
+
+      let deployer: Deployer | undefined;
+      if (choice.kind === "unavailable") {
         return {
           content: [{ type: "text", text: `Platform "${preferredPlatform}" not available. Install its CLI first.` }],
           isError: true,
         };
+      }
+      if (choice.kind === "use") {
+        deployer = choice.deployer;
+      } else if (choice.kind === "ask") {
+        if (ctx.hasUI && choice.options.length > 1) {
+          const labels = choice.options.map((d) => d.label);
+          const picked = await ctx.ui.select("Choose deployment platform", labels);
+          if (picked) {
+            const d = choice.options.find((d) => d.label === picked);
+            if (d) {
+              deployer = d;
+              sessionPreferredPlatform = d.name;
+            }
+          }
+        }
+        // Non-UI mode or cancelled selection: fall back to first available.
+        if (!deployer) deployer = choice.options[0];
+      }
+
+      if (!deployer) {
+        return { content: [{ type: "text", text: "No deployer selected." }], isError: true };
       }
 
       if (!existing && !sessionConfirmed && !isAutoConfirm()) {
@@ -126,10 +142,16 @@ export default function (pi: ExtensionAPI) {
       const hubDirPath = hubDir(ctx.cwd, deployer.name);
       writeArtifact(hubDirPath, slug, html);
 
-      onUpdate?.(`Deploying to ${deployer.label}...`);
+      const deployLines: string[] = [];
+      const execFn = (cmd: string, cwd: string) =>
+        execAsync(cmd, cwd, (line) => {
+          deployLines.push(line);
+          const display = deployLines.slice(-5).join("\n");
+          onUpdate?.({ content: [{ type: "text", text: `Deploying to ${deployer.label}...\n${display}` }] });
+        });
 
       try {
-        const result = deployer.deployHub(hubDirPath, ctx.cwd, state, exec);
+        const result = await deployer.deployHub(hubDirPath, ctx.cwd, state, execFn);
 
         const baseUrl = result.baseUrl.replace(/\/$/, "");
         const url = `${baseUrl}/${slug}/`;

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { slugify, remoteToPagesUrl, projectNameFromCwd } from "../extensions/helpers.js";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { slugify, remoteToPagesUrl, projectNameFromCwd, execAsync } from "../extensions/helpers.js";
 
 describe("slugify", () => {
   it("converts title to lowercase slug", () => {
@@ -75,5 +78,39 @@ describe("remoteToPagesUrl", () => {
     expect(remoteToPagesUrl("git@gitlab.com:user/repo.git")).toBe(
       "https://pages.github.com/ (unknown remote)"
     );
+  });
+});
+
+describe("execAsync", () => {
+  it("returns stdout on success", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-exec-test-"));
+    const out = await execAsync("echo hello", tmp);
+    expect(out).toBe("hello");
+  });
+
+  it("calls onLine for each output line", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-exec-test-"));
+    const lines: string[] = [];
+    await execAsync('printf "line1\nline2\nline3\n"', tmp, (l) => lines.push(l));
+    expect(lines).toEqual(["line1", "line2", "line3"]);
+  });
+
+  it("skips empty lines", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-exec-test-"));
+    const lines: string[] = [];
+    await execAsync('printf "a\n\n\nb\n"', tmp, (l) => lines.push(l));
+    expect(lines).toEqual(["a", "b"]);
+  });
+
+  it("rejects on non-zero exit code", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-exec-test-"));
+    await expect(execAsync("exit 1", tmp)).rejects.toThrow();
+  });
+
+  it("streams stderr lines too", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-exec-test-"));
+    const lines: string[] = [];
+    await execAsync('echo errline 1>&2', tmp, (l) => lines.push(l));
+    expect(lines).toEqual(["errline"]);
   });
 });

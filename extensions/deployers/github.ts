@@ -8,10 +8,11 @@ export const githubDeployer: Deployer = {
   name: "github",
   label: "GitHub Pages",
   check: () => which("npx") && isGitRepo(),
-  deployHub(hubDir, cwd, state, execFn) {
+  async deployHub(hubDir, cwd, state, execFn) {
     writeFileSync(join(hubDir, ".nojekyll"), "");
-    execFn(`npx gh-pages -d "${hubDir}" --nojekyll -m "pi-artifacts update"`, cwd);
-    const remoteUrl = execFn("git remote get-url origin", cwd);
+    // Run from hubDir; git traverses up to find the repo root
+    await execFn(`npx gh-pages -d . --nojekyll -m "pi-artifacts update"`, hubDir);
+    const remoteUrl = await execFn("git remote get-url origin", hubDir);
     const baseUrl = remoteToPagesUrl(remoteUrl);
     return { baseUrl };
   },

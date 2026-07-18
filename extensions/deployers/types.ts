@@ -5,6 +5,9 @@ export interface DeployResult {
   projectName?: string;
 }
 
+/** Async shell executor. Streaming progress is wired up by the caller. */
+export type AsyncExecFn = (cmd: string, cwd: string) => Promise<string>;
+
 export interface Deployer {
   name: Platform;
   label: string;
@@ -13,13 +16,13 @@ export interface Deployer {
   /**
    * Deploy the entire hub directory for this platform.
    * Must run from `cwd` (project root), not from hubDir.
-   * `execFn` is the shell executor (injectable for testing).
+   * `execFn` is the async shell executor (injectable for testing).
    * Returns the base URL of the deployed site.
    */
   deployHub(
     hubDir: string,
     cwd: string,
     state: { platforms: Record<string, { projectName?: string; baseUrl?: string }> },
-    execFn: (cmd: string, cwd: string) => string
-  ): DeployResult;
+    execFn: AsyncExecFn,
+  ): Promise<DeployResult>;
 }

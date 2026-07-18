@@ -1,18 +1,19 @@
-import type { Deployer, DeployResult } from "./types.js";
+import type { Deployer } from "./types.js";
 import { which } from "../helpers.js";
 
 export const vercelDeployer: Deployer = {
   name: "vercel",
   label: "Vercel",
   check: () => which("vercel"),
-  deployHub(hubDir, cwd, state, execFn) {
+  async deployHub(hubDir, cwd, state, execFn) {
     const info = state.platforms.vercel;
     const projectFlag = info?.projectName
       ? `--project "${info.projectName}"`
       : "";
-    const out = execFn(
-      `vercel deploy --prod --yes ${projectFlag} "${hubDir}"`,
-      cwd
+    // Run from hubDir so Vercel finds .vercel/project.json in cwd
+    const out = await execFn(
+      `vercel deploy --prod --yes ${projectFlag} .`,
+      hubDir
     );
     const lines = out.split("\n").filter(Boolean);
     const aliasLine = lines.find((l) => l.startsWith("▲ Aliased"));
