@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi-artifacts — User Flow Diagram</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --orange: #db6d28;
+    --cyan: #39c5cf;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 40px 20px 80px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 {
+    font-size: 26px; font-weight: 700; margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 36px; }
+
+  /* swimlane labels */
+  .lane {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted);
+    margin: 32px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .lane .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  /* nodes */
+  .node {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px;
+    width: 100%;
+    max-width: 540px;
+    position: relative;
+    transition: transform .15s, border-color .15s;
+  }
+  .node:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .node .title { font-size: 14px; font-weight: 650; margin-bottom: 3px; }
+  .node .desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .node .tag {
+    position: absolute; top: -9px; right: 14px;
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    padding: 2px 8px; border-radius: 20px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .node.start { border-color: var(--green); }
+  .node.start .tag { color: var(--green); border-color: var(--green); }
+  .node.end-ok { border-color: var(--green); }
+  .node.end-ok .tag { color: var(--green); border-color: var(--green); }
+  .node.end-err { border-color: var(--red); }
+  .node.end-err .tag { color: var(--red); border-color: var(--red); }
+  .node.decision { border-color: var(--yellow); }
+  .node.decision .tag { color: var(--yellow); border-color: var(--yellow); }
+  .node.action { border-color: var(--accent); }
+  .node.action .tag { color: var(--accent); border-color: var(--accent); }
+  .node.io { border-color: var(--purple); }
+  .node.io .tag { color: var(--purple); border-color: var(--purple); }
+
+  /* arrows */
+  .arrow {
+    width: 2px; height: 26px; background: var(--border);
+    position: relative;
+  }
+  .arrow::after {
+    content: ""; position: absolute; bottom: -1px; left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-top: 7px solid var(--border);
+  }
+  .arrow.yes { background: var(--green); }
+  .arrow.yes::after { border-top-color: var(--green); }
+  .arrow.no { background: var(--red); }
+  .arrow.no::after { border-top-color: var(--red); }
+  .arrow-label {
+    position: absolute; left: 12px; top: 4px;
+    font-size: 10.5px; font-weight: 700; color: var(--muted);
+  }
+
+  /* branch row */
+  .branch { display: flex; gap: 32px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  .branch-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  /* platforms grid */
+  .platforms { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+  .platform {
+    font-size: 11.5px; font-weight: 600; padding: 5px 12px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--bg);
+  }
+  .p-vercel { color: #fff; border-color: #000; background: #000; }
+  .p-cf { color: #fa6831; border-color: #fa6831; }
+  .p-netlify { color: #32b7a3; border-color: #32b7a3; }
+  .p-gh { color: var(--text); border-color: var(--muted); }
+
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 40px;
+    padding: 14px 18px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; font-size: 11.5px; color: var(--muted);
+  }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 4px; border: 1px solid; }
+
+  .foot { text-align: center; margin-top: 36px; color: var(--muted); font-size: 12px; }
+  code { background: #1f2937; padding: 1px 6px; border-radius: 4px; font-size: 11.5px; color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>pi-artifacts — User Flow</h1>
+  <div class="sub">How a request becomes a live URL via the <code>publish_artifact</code> tool</div>
+
+  <!-- LANE 1: USER -->
+  <div class="lane"><span class="dot" style="background:var(--green)"></span> User</div>
+  <div class="flow">
+    <div class="node start">
+      <span class="tag">START</span>
+      <div class="title">User asks pi for something visual</div>
+      <div class="desc">"Build a dashboard of our open PRs and publish it as an artifact" · "Make an annotated diff walkthrough" · "Create a comparison page"</div>
+    </div>
+    <div class="arrow"></div>
+  </div>
+
+  <!-- LANE 2: PI (LLM) -->
+  <div class="lane"><span class="dot" style="background:var(--accent)"></span> pi — LLM Agent</div>
+  <div class="flow">
+    <div class="node action">
+      <span class="tag">ACTION</span>
+      <div class="title">Build self-contained HTML</div>
+      <div class="desc">Inline CSS &amp; JS, images as data URIs — one portable file</div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node action">
+      <span class="tag">TOOL CALL</span>
+      <div class="title">Call <code>publish_artifact(html, title, platform?)</code></div>
+      <div class="desc">Same title on a later call = update in place. <code>platform</code> is optional.</div>
+    </div>
+    <div class="arrow"></div>
+  </div>
+
+  <!-- LANE 3: EXTENSION -->
+  <div class="lane"><span class="dot" style="background:var(--purple)"></span> Extension — publish_artifact</div>
+  <div class="flow">
+    <div class="node io">
+      <span class="tag">LOAD</span>
+      <div class="title">Load state from <code>.pi/artifacts/state.json</code></div>
+      <div class="desc">Check if an artifact with this title already exists (for updates)</div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node decision">
+      <span class="tag">DECISION</span>
+      <div class="title">Detect installed deployment CLIs</div>
+      <div class="desc"><code>deployers.filter(d =&gt; d.check())</code> — which of Vercel / Wrangler / Netlify / gh-pages are installed?</div>
+    </div>
+
+    <div class="arrow"></div>
+    <div class="branch">
+      <!-- NO CLI -->
+      <div class="branch-col">
+        <div class="node end-err" style="max-width:300px">
+          <span class="tag">ERROR</span>
+          <div class="title">No CLI found</div>
+          <div class="desc">Return install instructions for all four platforms</div>
+        </div>
+      </div>
+      <!-- CLIs FOUND -->
+      <div class="branch-col">
+        <div class="arrow no" style="height:0"></div>
+        <div class="node decision" style="max-width:300px">
+          <span class="tag">RESOLVE</span>
+          <div class="title">Resolve platform choice</div>
+          <div class="desc" style="margin-bottom:8px">
+            Priority: <code>preferred</code> param → existing artifact's platform → session choice → single available → <b>ask user</b>
+          </div>
+        </div>
+        <div class="arrow"></div>
+        <div class="branch">
+          <div class="branch-col">
+            <div class="node decision" style="max-width:200px">
+              <span class="tag">MULTI?</span>
+              <div class="title">Multiple CLIs &amp; no preference?</div>
+            </div>
+            <div class="arrow yes"></div>
+            <div class="node action" style="max-width:220px">
+              <span class="tag">UI PROMPT</span>
+              <div class="title">User picks platform</div>
+              <div class="desc"><code>ctx.ui.select()</code> — choice remembered for session</div>
+            </div>
+          </div>
+          <div class="branch-col">
+            <div class="platforms">
+              <span class="platform p-vercel">▲ Vercel</span>
+              <span class="platform p-cf">☁ Cloudflare</span>
+              <span class="platform p-netlify">Netlify</span>
+              <span class="platform p-gh">GitHub Pages</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+    <div class="node decision">
+      <span class="tag">DECISION</span>
+      <div class="title">First deploy this session &amp; no autoConfirm?</div>
+      <div class="desc">Skipped if: artifact already exists (update), session already confirmed, or <code>settings.artifacts.autoConfirm = true</code></div>
+    </div>
+
+    <div class="branch">
+      <div class="branch-col">
+        <div class="arrow no"></div>
+        <span class="arrow-label" style="position:static; color:var(--red)">No</span>
+        <div class="node end-err" style="max-width:240px">
+          <span class="tag">CANCELLED</span>
+          <div class="title">User declines</div>
+          <div class="desc">Return "publishing cancelled"</div>
+        </div>
+      </div>
+      <div class="branch-col">
+        <div class="arrow yes"></div>
+        <span class="arrow-label" style="position:static; color:var(--green)">Yes / autoConfirm</span>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+    <div class="node io">
+      <span class="tag">WRITE</span>
+      <div class="title">Write artifact HTML to hub directory</div>
+      <div class="desc"><code>.pi/artifacts/hub/&lt;platform&gt;/&lt;slug&gt;/index.html</code> — slug derived from title (reused if updating)</div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node action">
+      <span class="tag">DEPLOY</span>
+      <div class="title">Run platform CLI to deploy entire hub</div>
+      <div class="desc">Streams output live to the TUI via <code>execAsync</code> · 120s timeout · all artifacts on one platform share a single project</div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node io">
+      <span class="tag">SAVE</span>
+      <div class="title">Update &amp; persist state</div>
+      <div class="desc">Store <code>{ id, url, platform, slug }</code> keyed by title · record platform <code>baseUrl</code> &amp; <code>projectName</code></div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node end-ok">
+      <span class="tag">DONE</span>
+      <div class="title">Return live URL to user</div>
+      <div class="desc" style="margin-top:6px">
+        <code>https://&lt;project&gt;.vercel.app/&lt;slug&gt;/</code><br>
+        <code>https://&lt;project&gt;.pages.dev/&lt;slug&gt;/</code><br>
+        <code>https://&lt;site&gt;.netlify.app/&lt;slug&gt;/</code><br>
+        <code>https://&lt;user&gt;.github.io/&lt;repo&gt;/&lt;slug&gt;/</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="item"><span class="swatch" style="border-color:var(--green)"></span> Start / Success</div>
+    <div class="item"><span class="swatch" style="border-color:var(--accent)"></span> LLM Action</div>
+    <div class="item"><span class="swatch" style="border-color:var(--purple)"></span> I/O (read/write)</div>
+    <div class="item"><span class="swatch" style="border-color:var(--yellow)"></span> Decision</div>
+    <div class="item"><span class="swatch" style="border-color:var(--red)"></span> Error / Cancel</div>
+  </div>
+
+  <div class="foot">pi-artifacts · @mrsamdev/pi-artifacts · MIT</div>
+</div>
+</body>
+</html>

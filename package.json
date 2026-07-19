@@ -14,7 +14,7 @@
   "license": "MIT",
   "type": "module",
   "files": [
-    "extensions/",
+    "dist/",
     "skills/",
     "README.md"
   ],
@@ -26,15 +26,22 @@
     "url": "git+https://github.com/mrSamDev/pi-artifacts.git"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "build": "tsdown",
+    "prepublishOnly": "tsdown",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:all": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsdown": "^0.22.9",
+    "typescript": "^7.0.2",
     "vitest": "^3.2.7"
   },
   "pi": {
     "extensions": [
-      "./extensions"
+      "./dist/index.js"
     ],
     "skills": [
       "./skills"

@@ -72,6 +72,33 @@ Call with the same title to update an existing artifact in place.
 | Netlify | `https://my-site.netlify.app/my-slug/` |
 | GitHub Pages | `https://user.github.io/repo/my-slug/` |
 
+## Troubleshooting
+
+### Vercel: deployed URL shows a login page or 404
+
+If `publish_artifact` returns a Vercel URL that redirects to `vercel.com/login` (or shows `404: NOT_FOUND`), the project has **SSO Deployment Protection** enabled. This puts every deployment behind a Vercel login wall so the artifact isn't publicly viewable.
+
+Check and disable it:
+
+```bash
+# From your project's .pi/artifacts/hub/vercel directory
+cd .pi/artifacts/hub/vercel
+
+# Check current protection settings
+vercel project protection vercel
+
+# Disable SSO protection so deployments are public
+vercel project protection disable vercel --sso
+```
+
+After disabling, both the preview deployment URL and the production alias URL will serve your artifact publicly:
+
+```
+https://<project>.vercel.app/<slug>/   ✅ works
+```
+
+> **Note:** This is a per-project setting. If you re-enable SSO protection on the project via the Vercel dashboard, `publish_artifact` will break again the same way.
+
 ## Settings
 
 To skip the confirmation prompt, add to `~/.pi/agent/settings.json`:
