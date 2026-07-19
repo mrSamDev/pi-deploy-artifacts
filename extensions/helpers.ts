@@ -30,10 +30,6 @@ export function which(cmd: string): boolean {
   }
 }
 
-export function exec(cmd: string, cwd: string): string {
-  return execSync(cmd, { cwd, encoding: "utf-8", timeout: 120_000 }).trim();
-}
-
 /**
  * Async command executor that streams output line-by-line.
  * Keeps the event loop alive so the TUI can render updates.
@@ -42,11 +38,26 @@ export async function execAsync(
   cmd: string,
   cwd: string,
   onLine?: (line: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
+  // Fail fast if already aborted — don't even spawn.
+  if (signal?.aborted) {
+    throw new Error("Operation aborted");
+  }
+
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, { cwd, shell: true, timeout: 120_000 });
+    // Passing signal to spawn makes Node kill the child (SIGTERM) on abort.
+    const child = spawn(cmd, { cwd, shell: true, timeout: 120_000, signal });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const settle = (fn: () => void) => {
+      if (!settled) {
+        settled = true;
+        fn();
+      }
+    };
 
     const emitLines = (text: string) => {
       for (const line of text.split("\n")) {
@@ -69,17 +80,41 @@ export async function execAsync(
 
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error(stderr.trim() || `Command failed with code ${code}`));
+        settle(() => reject(new Error(stderr.trim() || `Command failed with code ${code}`)));
       } else {
-        resolve(stdout.trim());
+        settle(() => resolve(stdout.trim()));
       }
     });
 
-    child.on("error", reject);
+    child.on("error", (err) => {
+      settle(() => reject(err));
+    });
+
+    // Explicit abort listener for a clean error message. Node's spawn signal
+    // option also kills the child, but the AbortError it emits can race with
+    // the close event — this ensures "aborted" wins.
+    signal?.addEventListener(
+      "abort",
+      () => settle(() => reject(new Error("Operation aborted"))),
+      { once: true },
+    );
   });
 }
 
-/** Stable project name derived from cwd path */
+/** Stable project name derived from cwd path.
+ * Lowercased because Cloudflare Pages, Vercel, and Netlify all require
+ * lowercase project/site names. */
 export function projectNameFromCwd(cwd: string): string {
-  return `pi-artifacts-${cwd.replace(/[^a-zA-Z0-9]/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}`;
+  return `pi-artifacts-${cwd.replace(/[^a-zA-Z0-9]/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}`.toLowerCase();
+}
+
+const PROJECT_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$/;
+
+/**
+ * Validate a projectName loaded from persistent state before interpolating
+ * it into a shell command. State files can be hand-edited, so we must not
+ * trust stored values at the shell boundary.
+ */
+export function isValidProjectName(name: unknown): name is string {
+  return typeof name === "string" && PROJECT_NAME_RE.test(name);
 }

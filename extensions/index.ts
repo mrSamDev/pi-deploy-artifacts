@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -6,9 +6,10 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { slugify, execAsync } from "./helpers.js";
-import { hubDir, loadState, saveState } from "./state.js";
+import { hubDir, loadState, saveState, withLock, LockError } from "./state.js";
 import { deployers } from "./deployers/index.js";
 import type { Deployer } from "./deployers/types.js";
+import type { ArtifactState, Platform } from "./types.js";
 import { resolvePlatformChoice } from "./resolvePlatform.js";
 
 const SETTINGS_FILE = join(homedir(), ".pi", "agent", "settings.json");
@@ -38,19 +39,32 @@ function writeArtifact(hubDirPath: string, slug: string, html: string): void {
   writeFileSync(join(artifactDir, "index.html"), html);
 }
 
+// The runtime reads `isError` from the result (agent-loop.js) even though
+// it's not in the AgentToolResult type definition.
+type ToolResult = AgentToolResult<undefined> & { isError?: boolean };
+
+function textResult(text: string, isError = false): ToolResult {
+  return {
+    content: [{ type: "text" as const, text }],
+    details: undefined,
+    isError,
+  };
+}
+
 function updatePlatformState(
-  state: { platforms: Record<string, any> },
-  platform: string,
+  state: ArtifactState,
+  platform: Platform,
   baseUrl: string,
-  projectName?: string
+  projectName?: string,
 ): void {
   if (!state.platforms[platform]) {
     state.platforms[platform] = {};
   }
+  const info = state.platforms[platform]!;
   if (projectName) {
-    state.platforms[platform].projectName = projectName;
+    info.projectName = projectName;
   }
-  state.platforms[platform].baseUrl = baseUrl;
+  info.baseUrl = baseUrl;
 }
 
 export default function (pi: ExtensionAPI) {
@@ -83,94 +97,100 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       const { html, title, platform: preferredPlatform } = params;
 
-      const state = loadState(ctx.cwd);
-      const existing = state.artifacts[title];
-
       const available = deployers.filter((d) => d.check());
       if (available.length === 0) {
-        return { content: [{ type: "text", text: noCliMessage() }], isError: true };
+        return textResult(noCliMessage(), true);
       }
-
-      const choice = resolvePlatformChoice({
-        preferred: preferredPlatform,
-        existing: existing?.platform,
-        sessionChoice: sessionPreferredPlatform,
-        available,
-      });
-
-      let deployer: Deployer | undefined;
-      if (choice.kind === "unavailable") {
-        return {
-          content: [{ type: "text", text: `Platform "${preferredPlatform}" not available. Install its CLI first.` }],
-          isError: true,
-        };
-      }
-      if (choice.kind === "use") {
-        deployer = choice.deployer;
-      } else if (choice.kind === "ask") {
-        if (ctx.hasUI && choice.options.length > 1) {
-          const labels = choice.options.map((d) => d.label);
-          const picked = await ctx.ui.select("Choose deployment platform", labels);
-          if (picked) {
-            const d = choice.options.find((d) => d.label === picked);
-            if (d) {
-              deployer = d;
-              sessionPreferredPlatform = d.name;
-            }
-          }
-        }
-        // Non-UI mode or cancelled selection: fall back to first available.
-        if (!deployer) deployer = choice.options[0];
-      }
-
-      if (!deployer) {
-        return { content: [{ type: "text", text: "No deployer selected." }], isError: true };
-      }
-
-      if (!existing && !sessionConfirmed && !isAutoConfirm()) {
-        const ok = await ctx.ui.confirm(
-          "Publish Artifact",
-          `Deploy "${title}" to ${deployer.label}?\nThis will create a public URL.`
-        );
-        if (!ok) {
-          return { content: [{ type: "text", text: "Artifact publishing cancelled." }] };
-        }
-        sessionConfirmed = true;
-      }
-
-      const slug = existing?.slug ?? slugify(title);
-      const hubDirPath = hubDir(ctx.cwd, deployer.name);
-      writeArtifact(hubDirPath, slug, html);
-
-      const deployLines: string[] = [];
-      const execFn = (cmd: string, cwd: string) =>
-        execAsync(cmd, cwd, (line) => {
-          deployLines.push(line);
-          const display = deployLines.slice(-5).join("\n");
-          onUpdate?.({ content: [{ type: "text", text: `Deploying to ${deployer.label}...\n${display}` }] });
-        });
 
       try {
-        const result = await deployer.deployHub(hubDirPath, ctx.cwd, state, execFn);
+        return await withLock(ctx.cwd, async () => {
+          const state = loadState(ctx.cwd);
+          const existing = state.artifacts[title];
 
-        const baseUrl = result.baseUrl.replace(/\/$/, "");
-        const url = `${baseUrl}/${slug}/`;
+          const choice = resolvePlatformChoice({
+            preferred: preferredPlatform,
+            existing: existing?.platform,
+            sessionChoice: sessionPreferredPlatform,
+            available,
+          });
 
-        updatePlatformState(state, deployer.name, baseUrl, result.projectName);
+          let deployer: Deployer | undefined;
+          if (choice.kind === "unavailable") {
+            return textResult(`Platform "${preferredPlatform}" not available. Install its CLI first.`, true);
+          }
+          if (choice.kind === "use") {
+            deployer = choice.deployer;
+          } else if (choice.kind === "ask") {
+            if (ctx.hasUI && choice.options.length > 1) {
+              const labels = choice.options.map((d) => d.label);
+              const picked = await ctx.ui.select("Choose deployment platform", labels);
+              if (picked) {
+                const d = choice.options.find((d) => d.label === picked);
+                if (d) {
+                  deployer = d;
+                  sessionPreferredPlatform = d.name;
+                }
+              }
+            }
+            // Non-UI mode or cancelled selection: fall back to first available.
+            if (!deployer) deployer = choice.options[0];
+          }
 
-        state.artifacts[title] = {
-          id: existing?.id ?? randomUUID(),
-          url,
-          platform: deployer.name,
-          slug,
-        };
-        saveState(state, ctx.cwd);
+          if (!deployer) {
+            return textResult("No deployer selected.", true);
+          }
 
-        const verb = existing ? "Updated" : "Published";
-        return { content: [{ type: "text", text: `${verb} artifact "${title}" \u2192 ${url}` }] };
+          if (!existing && !sessionConfirmed && !isAutoConfirm()) {
+            const ok = await ctx.ui.confirm(
+              "Publish Artifact",
+              `Deploy "${title}" to ${deployer.label}?\nThis will create a public URL.`
+            );
+            if (!ok) {
+              return textResult("Artifact publishing cancelled.");
+            }
+            sessionConfirmed = true;
+          }
+
+          const slug = existing?.slug ?? slugify(title);
+          const hubDirPath = hubDir(ctx.cwd, deployer.name);
+          writeArtifact(hubDirPath, slug, html);
+
+          const deployLines: string[] = [];
+          const execFn = (cmd: string, cwd: string) =>
+            execAsync(cmd, cwd, (line) => {
+              deployLines.push(line);
+              const display = deployLines.slice(-5).join("\n");
+              onUpdate?.(textResult(`Deploying to ${deployer.label}...\n${display}`));
+            }, signal);
+
+          try {
+            const result = await deployer.deployHub(hubDirPath, ctx.cwd, state, execFn);
+
+            const baseUrl = result.baseUrl.replace(/\/$/, "");
+            const url = `${baseUrl}/${slug}/`;
+
+            updatePlatformState(state, deployer.name, baseUrl, result.projectName);
+
+            state.artifacts[title] = {
+              id: existing?.id ?? randomUUID(),
+              url,
+              platform: deployer.name,
+              slug,
+            };
+            saveState(state, ctx.cwd);
+
+            const verb = existing ? "Updated" : "Published";
+            return textResult(`${verb} artifact "${title}" \u2192 ${url}`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return textResult(`Deploy failed: ${msg}`, true);
+          }
+        });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { content: [{ type: "text", text: `Deploy failed: ${msg}` }], isError: true };
+        if (err instanceof LockError) {
+          return textResult(err.message, true);
+        }
+        throw err;
       }
     },
   });

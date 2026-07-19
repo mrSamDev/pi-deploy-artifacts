@@ -1,0 +1,135 @@
+name: Publish to npm
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# Only one publish at a time.
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Stage 1 — Prepare & verify.
+  # Runs every gate up front so a failure never triggers an approval request.
+  # No publish here; this job only proves the tag is releasable.
+  # Gates: typecheck (tsc --noEmit), unit tests, build, changelog checks.
+  # ─────────────────────────────────────────────────────────────────────────
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+      version: ${{ steps.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+        with:
+          # pnpm v11+ implements `pnpm publish` natively with OIDC trusted
+          # publishing support. Pin for reproducible releases.
+          version: 11.5.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # Trusted publishing requires Node >= 22.14. Use the current 24.x line.
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Verify no placeholder URLs
+        run: "! grep -n '<you>\\|<owner>\\|<repo>' package.json"
+      - name: Verify changelog has an Unreleased section
+        run: grep -q '## \[Unreleased\]' CHANGELOG.md
+      - name: Verify changelog documents current version
+        run: grep -q "## \[$(node -p "require('./package.json').version")\]" CHANGELOG.md
+      - name: Verify release tag
+        id: verify
+        run: |
+          if ! git describe --tags --exact-match HEAD >/dev/null 2>&1; then
+            echo "::error::Refusing to publish: HEAD is not an exact version tag."
+            echo "When triggering via workflow_dispatch, select a tag ref, not a branch."
+            exit 1
+          fi
+          TAG="$(git describe --tags --exact-match HEAD)"
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "Staged release from tag: $TAG (version $VERSION)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Stage 2 — Approve & ship (tokenless OIDC trusted publishing).
+  #
+  # Runs in the `production` environment, which must be configured with
+  # required reviewers (Settings → Environments → production → Required
+  # reviewers). The run pauses here until you click "Review deployments" and
+  # approve. After approval it publishes to npm via OIDC — NO long-lived
+  # NPM_TOKEN — and merges the tag into main.
+  #
+  # IMPORTANT: the trusted-publisher config on npmjs.com MUST list this
+  # environment name (`production`) and this workflow filename (`publish.yml`),
+  # or the OIDC exchange will fail with ENEEDAUTH.
+  # ─────────────────────────────────────────────────────────────────────────
+  publish:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://www.npmjs.com/package/@mrsamdev/pi-artifacts/v/${{ needs.prepare.outputs.version }}
+    permissions:
+      contents: write   # to push the release merge to main
+      id-token: write  # required for npm trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history so the tag→main merge is correct
+      - uses: pnpm/action-setup@a15d269cd4658e1107c09f1fabf4cbd7bd1f308a # v4.4.0
+        with:
+          version: 11.5.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      # `prepublishOnly` (tsc --noEmit && tsdown) typechecks then rebuilds
+      # dist/ from the verified tag, then pnpm packs + publishes. No NPM_TOKEN:
+      # pnpm v11 detects GitHub Actions, exchanges the OIDC token for a
+      # short-lived publish credential, and generates the provenance
+      # attestation automatically.
+      - name: Publish (OIDC trusted publishing)
+        run: pnpm publish --access public --provenance --no-git-checks
+        # --no-git-checks disables pnpm's three local git guards (publish-branch,
+        # clean-tree, no-unpushed-commits). All three are redundant here:
+        #   - publish-branch: actions/checkout leaves a detached HEAD at the tag,
+        #     so this check can never pass in CI; the workflow's `on: push: tags`
+        #     gate already restricts publishes to version tags.
+        #   - clean-tree: the runner starts from a fresh checkout of the verified
+        #     tag (the `Verify release tag` step proved HEAD == exact version tag),
+        #     so there can be no uncommitted divergence from the tag.
+        #   - no-unpushed: the tag is on origin by definition (it triggered this run).
+        # `--provenance` attests the artifact against the git ref independently of
+        # these checks, so disabling them does not weaken the SLSA attestation.
+
+      - name: Merge release tag into main
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git pull --ff-only origin main
+          # Fast-forward when possible; otherwise create a merge commit so the
+          # release is always landed on main even if main moved since the tag.
+          if git merge --ff-only "$TAG"; then
+            echo "Fast-forwarded main to $TAG"
+          else
+            git merge --no-ff "$TAG" -m "chore(release): merge $TAG into main"
+            echo "Merged $TAG into main (merge commit)"
+          fi
+          git push origin main
+          echo "✓ main now points at $TAG"

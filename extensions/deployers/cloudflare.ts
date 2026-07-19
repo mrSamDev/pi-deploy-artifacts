@@ -1,5 +1,5 @@
 import type { Deployer } from "./types.js";
-import { which } from "../helpers.js";
+import { which, isValidProjectName, projectNameFromCwd } from "../helpers.js";
 
 export const cloudflareDeployer: Deployer = {
   name: "cloudflare",
@@ -7,15 +7,18 @@ export const cloudflareDeployer: Deployer = {
   check: () => which("wrangler"),
   async deployHub(hubDir, cwd, state, execFn) {
     const info = state.platforms.cloudflare;
-    let projectName = info?.projectName;
+    let projectName = isValidProjectName(info?.projectName) ? info.projectName : undefined;
 
     if (!projectName) {
-      projectName = `pi-artifacts-${cwd.replace(/[^a-zA-Z0-9]/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)}`;
+      projectName = projectNameFromCwd(cwd);
       try {
         // Run from hubDir for consistency
         await execFn(`wrangler pages project create "${projectName}"`, hubDir);
-      } catch {
-        // Project may already exist
+      } catch (err) {
+        // "already exists" is expected when reusing a project; anything else
+        // (auth failure, quota, network) must surface, not get swallowed.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/already exists/i.test(msg)) throw err;
       }
     }
 

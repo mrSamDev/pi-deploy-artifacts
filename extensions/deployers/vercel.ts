@@ -1,5 +1,5 @@
 import type { Deployer } from "./types.js";
-import { which } from "../helpers.js";
+import { which, isValidProjectName } from "../helpers.js";
 
 export const vercelDeployer: Deployer = {
   name: "vercel",
@@ -7,7 +7,7 @@ export const vercelDeployer: Deployer = {
   check: () => which("vercel"),
   async deployHub(hubDir, cwd, state, execFn) {
     const info = state.platforms.vercel;
-    const projectFlag = info?.projectName
+    const projectFlag = isValidProjectName(info?.projectName)
       ? `--project "${info.projectName}"`
       : "";
     // Run from hubDir so Vercel finds .vercel/project.json in cwd

@@ -8,6 +8,8 @@ import {
   stateFile,
   loadState,
   saveState,
+  withLock,
+  LockError,
 } from "../extensions/state.js";
 
 let tmp: string;
@@ -76,5 +78,53 @@ describe("saveState", () => {
     saveState({ artifacts: {}, platforms: {} }, tmp);
     const raw = readFileSync(stateFile(tmp), "utf-8");
     expect(() => JSON.parse(raw)).not.toThrow();
+  });
+
+  it("does not leave a temp file after successful write", () => {
+    saveState({ artifacts: {}, platforms: {} }, tmp);
+    expect(existsSync(stateFile(tmp) + ".tmp")).toBe(false);
+    expect(existsSync(stateFile(tmp))).toBe(true);
+  });
+});
+
+describe("withLock", () => {
+  it("executes the function and releases the lock", async () => {
+    const result = await withLock(tmp, async () => 42);
+    expect(result).toBe(42);
+    expect(existsSync(join(artifactsDir(tmp), ".lock"))).toBe(false);
+  });
+
+  it("writes the current PID into the lock file while held", async () => {
+    let pidSeen: string | undefined;
+    await withLock(tmp, async () => {
+      pidSeen = readFileSync(join(artifactsDir(tmp), ".lock"), "utf-8").trim();
+    });
+    expect(pidSeen).toBe(String(process.pid));
+  });
+
+  it("throws LockError when a live lock is held", async () => {
+    const lockPath = join(artifactsDir(tmp), ".lock");
+    mkdirSync(artifactsDir(tmp), { recursive: true });
+    // Write our own PID — process.kill(pid, 0) will confirm we're alive
+    writeFileSync(lockPath, String(process.pid));
+    await expect(withLock(tmp, async () => 1)).rejects.toThrow(LockError);
+  });
+
+  it("acquires a stale lock (dead PID)", async () => {
+    const lockPath = join(artifactsDir(tmp), ".lock");
+    mkdirSync(artifactsDir(tmp), { recursive: true });
+    // PID 999999 is very unlikely to exist
+    writeFileSync(lockPath, "999999");
+    const result = await withLock(tmp, async () => 42);
+    expect(result).toBe(42);
+  });
+
+  it("releases the lock even if the function throws", async () => {
+    await expect(
+      withLock(tmp, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(existsSync(join(artifactsDir(tmp), ".lock"))).toBe(false);
   });
 });

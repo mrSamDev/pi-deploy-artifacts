@@ -1,11 +1,11 @@
 import { defineConfig } from 'vitest/config'
 
-// Two test projects:
+// Two test projects, both under tests/:
 //
-//   unit        — fast, offline tests (test/[name].test.ts).
+//   unit        — fast, offline tests (tests/[name].test.ts).
 //                 Run by default with `pnpm test`.
 //
-//   integration — slow, real-deploy tests (test/[name].integration.test.ts)
+//   integration — slow, real-deploy tests (tests/[name].integration.test.ts)
 //                 that hit live Netlify / Cloudflare / Vercel accounts.
 //                 Opt-in via `pnpm test:integration`.
 //
@@ -18,14 +18,14 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['test/**/*.test.ts'],
-          exclude: ['test/**/*.integration.test.ts'],
+          include: ['tests/**/*.test.ts'],
+          exclude: ['tests/**/*.integration.test.ts'],
         },
       },
       {
         test: {
           name: 'integration',
-          include: ['test/**/*.integration.test.ts'],
+          include: ['tests/**/*.integration.test.ts'],
           // Real deploys + CDN propagation can take a while.
           testTimeout: 180_000,
           hookTimeout: 180_000,

@@ -27,15 +27,19 @@
   },
   "scripts": {
     "build": "tsdown",
-    "prepublishOnly": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "tsc --noEmit && tsdown",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:integration": "vitest run --project integration",
     "test:all": "vitest run"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
     "@types/node": "^26.1.1",
     "tsdown": "^0.22.9",
+    "typebox": "^1.3.6",
     "typescript": "^7.0.2",
     "vitest": "^3.2.7"
   },

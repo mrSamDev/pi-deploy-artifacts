@@ -6,6 +6,14 @@ Ask pi to build a dashboard, annotated diff, comparison layout, or interactive p
 
 ## Install
 
+Install from npm:
+
+```bash
+pi install @mrsamdev/pi-artifacts
+```
+
+Or install directly from GitHub:
+
 ```bash
 pi install git:github.com/mrSamDev/pi-artifacts
 ```
@@ -19,6 +27,7 @@ pi -e ./path/to/pi-artifacts/extensions/index.ts
 ## Links
 
 - GitHub: https://github.com/mrSamDev/pi-artifacts
+- npm: https://www.npmjs.com/package/@mrsamdev/pi-artifacts
 
 ## Prerequisites
 
@@ -109,6 +118,22 @@ To skip the confirmation prompt, add to `~/.pi/agent/settings.json`:
 }
 ```
 
+## Testing
+
+Unit tests run offline with mocked CLI calls:
+
+```bash
+pnpm test
+```
+
+Integration tests deploy `artifact-flow.html` (a self-contained HTML page at the
+repo root) to live Vercel, Cloudflare, and Netlify accounts, then fetch each URL
+to verify the content survived the round-trip. They require authenticated CLIs:
+
+```bash
+pnpm test:integration
+```
+
 ## Package structure
 
 ```
@@ -118,7 +143,7 @@ pi-artifacts/
 ├── extensions/
 │   ├── index.ts              # Extension entry point (publish_artifact tool)
 │   ├── types.ts              # Shared types
-│   ├── helpers.ts            # Pure functions (slugify, remoteToPagesUrl, which, exec)
+│   ├── helpers.ts            # Pure functions (slugify, remoteToPagesUrl, which, execAsync)
 │   ├── state.ts              # State load/save, path helpers
 │   └── deployers/
 │       ├── index.ts          # Deployer registry
@@ -133,7 +158,9 @@ pi-artifacts/
 ├── tests/
 │   ├── helpers.test.ts
 │   ├── state.test.ts
-│   └── deployers.test.ts
+│   ├── deployers.test.ts
+│   └── deploy.integration.test.ts
+├── artifact-flow.html        # Integration test fixture (self-contained HTML page)
 └── README.md
 ```
 

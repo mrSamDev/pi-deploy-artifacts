@@ -9,5 +9,5 @@
     "esModuleInterop": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["test/**/*.ts", "vitest.config.ts"]
+  "include": ["extensions/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
 }
