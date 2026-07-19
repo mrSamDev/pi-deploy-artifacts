@@ -1,4 +1,4 @@
-# pi-artifacts
+# pi-deploy-artifacts
 
 Deploy HTML pages to live URLs on **Vercel**, **Cloudflare Pages**, **Netlify**, or **GitHub Pages** — like Claude Code artifacts for pi.
 
@@ -6,28 +6,26 @@ Ask pi to build a dashboard, annotated diff, comparison layout, or interactive p
 
 ## Install
 
-Install from npm:
+```bash
+pi install npm:@mrsamdev/pi-deploy-artifacts
+```
+
+To try it for a single run without adding it to your Pi settings:
 
 ```bash
-pi install @mrsamdev/pi-artifacts
+pi -e npm:@mrsamdev/pi-deploy-artifacts
 ```
 
 Or install directly from GitHub:
 
 ```bash
-pi install git:github.com/mrSamDev/pi-artifacts
-```
-
-Or test without installing:
-
-```bash
-pi -e ./path/to/pi-artifacts/extensions/index.ts
+pi install git:github.com/mrSamDev/pi-deploy-artifacts
 ```
 
 ## Links
 
-- GitHub: https://github.com/mrSamDev/pi-artifacts
-- npm: https://www.npmjs.com/package/@mrsamdev/pi-artifacts
+- GitHub: https://github.com/mrSamDev/pi-deploy-artifacts
+- npm: https://www.npmjs.com/package/@mrsamdev/pi-deploy-artifacts
 
 ## Prerequisites
 
@@ -137,7 +135,7 @@ pnpm test:integration
 ## Package structure
 
 ```
-pi-artifacts/
+pi-deploy-artifacts/
 ├── package.json              # pi manifest
 ├── vitest.config.ts
 ├── extensions/

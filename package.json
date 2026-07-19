@@ -1,5 +1,5 @@
 {
-  "name": "@mrsamdev/pi-artifacts",
+  "name": "@mrsamdev/pi-deploy-artifacts",
   "version": "0.1.0",
   "description": "Deploy HTML artifacts to Vercel, Cloudflare Pages, Netlify, or GitHub Pages — like Claude Code artifacts for pi",
   "keywords": [
@@ -23,7 +23,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mrSamDev/pi-artifacts.git"
+    "url": "git+https://github.com/mrSamDev/pi-deploy-artifacts.git"
   },
   "scripts": {
     "build": "tsdown",
